@@ -1,0 +1,123 @@
+# Local MLOps stack. See README.md for the startup sequence.
+#   docker compose up -d                              # infra + API + UI
+#   docker compose --profile train run --rm trainer   # train -> MLflow -> MinIO -> webhook
+
+x-minio-client-env: &minio-client-env
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+  MINIO_BUCKET: ${MINIO_BUCKET:-fashion-minst-bucket}
+  MINIO_SECURE: "false"
+
+services:
+  minio:
+    # Official minio/minio images stopped being published in Oct 2025;
+    # pgsty/minio is a maintained community build of the same server.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r line <&3 && [[ $$line == *200* ]]"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot job: create the model bucket.
+  minio-init:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: fashion-mlops-api:latest
+    command: ["python", "-m", "fashion_mlops.storage"]
+    environment: *minio-client-env
+    depends_on:
+      minio: { condition: service_healthy }
+    restart: "no"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.0
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts
+      - --serve-artifacts
+      - --allowed-hosts=*
+      - --workers=1
+    environment:
+      # Background job runners (used by MLflow's GenAI features)
+      # and are not needed for experiment tracking.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    ports:
+      - "${MLFLOW_PORT:-5050}:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  webhook-receiver:
+    image: python:3.12-slim
+    command: ["python", "/app/webhook_receiver.py"]
+    environment:
+      PORT: "8088"
+      WEBHOOK_LOG_DIR: /app/payloads
+    volumes:
+      - ./scripts/webhook_receiver.py:/app/webhook_receiver.py:ro
+      - ./webhook_payloads:/app/payloads
+    ports:
+      - "${WEBHOOK_PORT:-8088}:8088"
+
+  trainer:
+    profiles: ["train"]
+    build: { context: ., dockerfile: docker/trainer.Dockerfile }
+    image: fashion-mlops-trainer:latest
+    environment:
+      <<: *minio-client-env
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-receiver:8088/webhook}
+      TRAIN_CONFIG: configs/train.toml
+    volumes:
+      - ./configs:/app/configs:ro      # edit configs without rebuilding
+      - fashion-data:/app/data         # dataset download cache
+    depends_on:
+      minio-init: { condition: service_completed_successfully }
+      mlflow: { condition: service_healthy }
+      webhook-receiver: { condition: service_started }
+
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: fashion-mlops-api:latest
+    environment:
+      <<: *minio-client-env
+      MODEL_SELECTOR: ${MODEL_SELECTOR:-latest}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      minio-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  ui:
+    build: { context: ., dockerfile: docker/ui.Dockerfile }
+    image: fashion-mlops-ui:latest
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  minio-data:
+  mlflow-data:
+  fashion-data:
