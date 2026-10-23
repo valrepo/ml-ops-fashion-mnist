@@ -1,0 +1,31 @@
+# Example training configuration.
+# Any value can be overridden without editing this file:
+#   - environment variables:  TRAIN__TRAINING__EPOCHS=5  (TRAIN__<SECTION>__<KEY>)
+#   - command line:           fashion-train --config configs/train.toml --set training.epochs=5
+# Precedence: defaults < TOML file < environment variables < --set arguments.
+
+[experiment]
+name = "fashion-mnist-lenet5"
+run_name = ""  # empty -> MLflow generates a name
+tags = { model = "lenet5", dataset = "fashion-mnist" }
+
+[data]
+data_dir = "data"
+val_split = 0.1
+num_workers = 2
+pin_memory = false
+
+[training]
+epochs = 10
+batch_size = 128
+learning_rate = 0.001
+optimizer = "adam"
+momentum = 0.9
+weight_decay = 0.0
+loss = "cross_entropy"
+scheduler = "none" # none | step | cosine | plateau
+step_size = 5
+gamma = 0.5
+early_stopping_patience = 3
+seed = 42
+device = "auto"  # auto | cpu | cuda | mps
