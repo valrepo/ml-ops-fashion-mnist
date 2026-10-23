@@ -1,0 +1,15 @@
+.venv
+.idea
+.git
+.pytest_cache
+.ruff_cache
+**/__pycache__
+data
+mlruns
+mlartifacts
+webhook_payloads
+.env
+*.md
+!README.md
+tests
+docker-compose.yml

@@ -1,0 +1,53 @@
+[project]
+name = "fashion-mlops"
+version = "0.1.0"
+description = "Train, track, store and serve a LeNet-5 Fashion-MNIST classifier (MLflow + MinIO + FastAPI + Streamlit)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "minio>=7.2",
+]
+
+[project.optional-dependencies]
+# Shared by training and inference (model definition, preprocessing).
+torch = [
+    "torch>=2.3",
+    "torchvision>=0.18",
+]
+train = [
+    "fashion-mlops[torch]",
+    "mlflow>=2.14",
+    "requests>=2.31",
+    "scikit-learn>=1.4",
+]
+api = [
+    "fashion-mlops[torch]",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
+ui = [
+    "streamlit>=1.35",
+    "requests>=2.31",
+]
+dev = [
+    "fashion-mlops[train,api,ui]",
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+fashion-train = "fashion_mlops.train:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_mlops"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
