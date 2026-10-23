@@ -158,6 +158,8 @@ def run(cfg: Config, config_path: str | None, state: dict | None = None) -> dict
     scheduler = build_scheduler(cfg, optimizer)
 
     mlflow.set_experiment(cfg.experiment.name)
+    # MLflow 3 may open new experiments in its GenAI view; mark this one as classic ML training.
+    mlflow.set_experiment_tag("mlflow.experimentKind", "custom_model_development")
     with mlflow.start_run(run_name=cfg.experiment.run_name or None) as active:
         run_id = active.info.run_id
         state["run_id"] = run_id
@@ -261,7 +263,8 @@ def run(cfg: Config, config_path: str | None, state: dict | None = None) -> dict
         experiment_id = active.info.experiment_id
 
     # Only reached when training, MLflow logging and the MinIO upload all succeeded.
-    tracking_uri = mlflow.get_tracking_uri()
+    # Inside Compose the tracking URI is http://mlflow:5000, which a browser can't open.
+    tracking_uri = os.environ.get("MLFLOW_PUBLIC_URL") or mlflow.get_tracking_uri()
     return {
         "event": "training.completed",
         "status": "success",

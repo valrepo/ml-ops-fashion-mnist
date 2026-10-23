@@ -161,6 +161,7 @@ uv run fashion-train --set training.epochs=3
 | Variable | Used by | Default |
 |---|---|---|
 | `MLFLOW_TRACKING_URI` | trainer | `http://mlflow:5000` in Compose |
+| `MLFLOW_PUBLIC_URL` | trainer | `http://localhost:5050` in Compose: browser-reachable MLflow URL used for `mlflow_run_url` in the webhook (unset = tracking URI) |
 | `MINIO_ENDPOINT` | trainer, api | `minio:9000` in Compose |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | trainer, api | from `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` in `.env` |
 | `MINIO_BUCKET` | trainer, api | `fashion-minst-bucket` |
@@ -174,6 +175,9 @@ uv run fashion-train --set training.epochs=3
 ## 4. MLflow
 
 Open **http://localhost:5050**, then the experiment **`fashion-mnist-lenet5`** in the left panel. Each training run is one row.
+Direct link to the runs table: http://localhost:5050/#/experiments/1/runs?workflowType=machine_learning
+
+> MLflow 3 has two views per experiment: **Machine learning** (runs, params, metrics) and **GenAI apps & agents** (LLM traces). This project only uses the first one. The trainer tags the experiment (`mlflow.experimentKind=custom_model_development`) so MLflow opens the runs table; if you still land on an empty GenAI page, switch the view at the top of the experiment page.
 
 - **Parameters:** every config value (`training.epochs`, `training.batch_size`, `training.learning_rate`, `training.optimizer`, `training.loss`, `training.seed`, `data.val_split`, …) plus the dataset split sizes.
 - **Metrics (per epoch):** `train_loss`, `train_accuracy`, `val_loss`, `val_accuracy_epoch`, `learning_rate`. Click a metric to see its curve. Select several runs and press **Compare** to overlay them.
@@ -226,7 +230,7 @@ After training, MLflow logging **and** a confirmed MinIO upload (a `stat_object`
   "run_id": "9b1d7c3e5f2a4e0c8d6b7a1f2e3d4c5b",
   "experiment_name": "fashion-mnist-lenet5",
   "experiment_id": "1",
-  "mlflow_run_url": "http://mlflow:5000/#/experiments/1/runs/9b1d7c3e5f2a4e0c8d6b7a1f2e3d4c5b",
+  "mlflow_run_url": "http://localhost:5050/#/experiments/1/runs/9b1d7c3e5f2a4e0c8d6b7a1f2e3d4c5b",
   "model": {
     "bucket": "fashion-minst-bucket",
     "object_key": "model/9b1d7c3e5f2a4e0c8d6b7a1f2e3d4c5b/model.pt"

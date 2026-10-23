@@ -84,6 +84,7 @@ services:
     environment:
       <<: *minio-client-env
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_PUBLIC_URL: http://localhost:${MLFLOW_PORT:-5050}   # link used in the webhook payload
       WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-receiver:8088/webhook}
       TRAIN_CONFIG: configs/train.toml
     volumes:
